@@ -1,4 +1,4 @@
-# Quantitative Asset Allocation
+# Portfolio Construction and Index Replication
 
 A research suite of five quantitative-finance projects on asset allocation, risk management, and
 return forecasting. The work follows a single thesis: **classical mean–variance optimization is
