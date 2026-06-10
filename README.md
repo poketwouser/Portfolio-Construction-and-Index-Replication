@@ -1,97 +1,154 @@
 # Quantitative Asset Allocation
 
-## Overview
+A research suite of five quantitative-finance projects on asset allocation, risk management, and
+return forecasting. The work follows a single thesis: **classical mean–variance optimization is
+fragile on real market data** — covariance matrices are ill-conditioned, returns are
+non-stationary, and optimal subset selection is combinatorially intractable — and the practical
+fixes come from **regularization and machine learning**. Each project pairs a financial problem
+with a method that respects these empirical realities, and reports honest out-of-sample results.
 
-This repository contains a collection of quantitative finance projects focused on asset allocation, risk management, and return forecasting. The underlying progression of the work moves from classical mean-variance frameworks to regularized machine learning methodologies. The primary objective is to build practical trading algorithms and portfolios that respect the empirical realities of financial data, such as ill-conditioned covariance matrices, non-stationarity, and computational constraints in combinatorial optimization.
+> All headline numbers below are taken from executed notebook outputs in this repository.
 
-## Project Portfolio
+---
 
-### Ex-Post Machine Learning Techniques for Portfolio Optimization
+## Projects at a Glance
 
-* **Objective**: Stabilize the efficient frontier and reduce portfolio turnover.
-* **Financial context**: Standard Markowitz optimization assumes sample covariance matrices are perfectly estimated. In reality, these matrices are highly ill-conditioned, leading to extreme weight allocations and high turnover when applied to equity markets.
-* **Methodology**: Applied statistical regularization and structural regularization to a universe of 12 NSE stocks over a 5-year period.
-* **Models / techniques used**: Ledoit-Wolf Shrinkage estimator, Hierarchical Risk Parity (HRP), recursive bisection, and bootstrap resampling.
-* **Key findings**: Shrinking the sample covariance matrix significantly lowered the condition number. HRP clustered statistically similar assets without relying on predefined sector labels, which materially reduced out-of-sample portfolio turnover compared to traditional mean-variance methods.
-* **Skills demonstrated**: Covariance matrix estimation, unsupervised learning (clustering), algorithm implementation, and financial stability analysis.
+| Project | Universe / Scale | Core method | Headline result |
+|---|---|---|---|
+| [Ex-Post ML Techniques](#1-ex-post-ml-techniques-for-portfolio-optimization) | 12 NSE stocks, 5y | Ledoit–Wolf shrinkage + Hierarchical Risk Parity | Covariance condition number **29.3 → 13.3 (−55%)**; HRP **~157% lower turnover** than mean–variance |
+| [Portfolio Replication](#2-portfolio-replication-index-tracking) | **S&P 500 — 559 stocks**, 5y | L1 (Lasso) sparse tracking vs. autoencoder factor map | Tracked index with **43 of 559 names (−92%)**, test TE **0.0045/day**; beat autoencoder **~16×** on out-of-sample TE |
+| [ML Pipeline](#3-ml-pipeline-for-portfolio-optimization) | 6 NSE stocks, 5y daily, **44 features** | FinBERT sentiment + GBMs/LSTM under walk-forward CV | Leakage-free pipeline; **FinBERT over 5,426 headlines**; HRP-based portfolio backtest framework |
+| [Goal-Based Optimization](#4-goal-based-portfolio-optimization) | 5 equities, 20y horizon | Vectorized Monte Carlo + combinatorial / SLSQP search | **5,000 paths × 70 allocations × 20y**; liability timing shown to drive optimal allocation |
+| [Modern Portfolio Theory](#5-modern-portfolio-theory-baseline) | 10 of 30 stocks, 3y | Markowitz efficient frontier | GMV vs. Max-Sharpe tangency portfolios; classical baseline |
 
-### Goal-Based Portfolio Optimization
+---
 
-* **Objective**: Construct a static portfolio to maximize the probability of achieving sequential, time-bound financial goals.
-* **Financial context**: Investors often face discrete liabilities at specific future intervals (e.g., intermediate liquidity needs before retirement). Failure to meet a liability incurs a borrowing penalty, making sequence of returns risk critical.
-* **Methodology**: Modeled a 20-year investment horizon with specific cash outflows and borrowing penalties using 5 uncorrelated Indian equities. Evaluated two distinct withdrawal sequences (aggressive early withdrawals vs. backloaded withdrawals).
-* **Models / techniques used**: Monte Carlo simulation (5,000 paths per portfolio), brute-force combinatorial optimization on discrete weights, and probability maximization.
-* **Key findings**: The timing of liabilities fundamentally alters the optimal asset allocation. Front-loaded liabilities demanded lower volatility combinations, while back-loaded liabilities allowed for higher expected returns despite larger drawdowns.
-* **Skills demonstrated**: Stochastic modeling, path-dependent option pricing logic, simulation scaling, and computational search.
+## 1. Ex-Post ML Techniques for Portfolio Optimization
 
-### Machine Learning Pipeline for Portfolio Optimization
+**Problem.** Markowitz optimization assumes the sample covariance matrix is well estimated. In
+practice it is highly ill-conditioned, producing extreme weights and high turnover out-of-sample.
 
-* **Objective**: Forecast daily equity returns using a multimodal dataset and construct a forward-looking portfolio.
-* **Financial context**: Pure price action often lacks predictive power. Alpha generation requires synthesizing market microstructure, macroeconomic indicators, fundamental ratios, and alternative data.
-* **Methodology**: Built a predictive system for a 6-stock Indian equity universe using 5 years of daily data. The system incorporated lagged features to eliminate look-ahead bias and normalized inputs to handle financial outliers.
-* **Models / techniques used**: Pre-trained transformers (FinBERT) for NLP sentiment analysis on financial news, time-series walk-forward nested cross-validation, and recursive feature elimination.
-* **Key findings**: Alternative sentiment data improved directional accuracy during earnings windows. Walk-forward validation proved that standard K-fold cross-validation severely overestimates performance in financial time series due to temporal leakage.
-* **Skills demonstrated**: End-to-end data pipeline engineering, natural language processing, feature engineering, and rigorous out-of-sample testing.
+**Approach.** Applied **statistical regularization** (Ledoit–Wolf shrinkage) and **structural
+regularization** (Hierarchical Risk Parity) to a 12-stock NSE universe over 5 years.
 
-### Portfolio Replication
+**Results (measured).**
+- Shrinkage reduced the covariance **condition number from 29.34 to 13.29 (−55%)** at a fitted
+  shrinkage intensity of **0.164**.
+- HRP — correlation-distance clustering, quasi-diagonalization, and recursive bisection — allocated
+  risk **without predefined sector labels** and produced **~157% lower portfolio turnover** than the
+  mean–variance allocation.
 
-* **Objective**: Replicate the daily return profile of the S&P 500 Index using a strictly limited subset of its constituent stocks (k <= 50).
-* **Financial context**: Index tracking under cardinality constraints is necessary for minimizing transaction costs and managing liquidity, but selecting the optimal subset is computationally intractable (NP-hard).
-* **Methodology**: Approximated the mixed-integer quadratic programming (MIQP) problem over a 5-year period using heuristic and regularized approaches to minimize tracking error.
-* **Models / techniques used**: Lasso Regression (L1 regularization) to enforce sparsity and Latent Factor Mapping.
-* **Key findings**: The tradeoff between sparsity and tracking error is non-linear. The models successfully identified a subset that matched benchmark returns while avoiding unintentional sector drift.
-* **Skills demonstrated**: High-dimensional regression, factor modeling, optimization heuristics, and tracking error minimization.
+**Skills.** Covariance estimation, unsupervised clustering, numerical stability analysis.
 
-### Modern Portfolio Theory
+## 2. Portfolio Replication (Index Tracking)
 
-* **Objective**: Engineer a weighting strategy that maximizes risk-adjusted performance using a defined multi-asset universe.
-* **Financial context**: The fundamental baseline for quantitative asset management involves mapping the expected return and variance trade-off across uncorrelated assets.
-* **Methodology**: Analyzed a 10-stock universe selected from a 30-stock dataset based on historical correlation structures. Evaluated long-only constraints over a 3-year period.
-* **Models / techniques used**: Markowitz optimization, Monte Carlo efficient frontier generation, correlation matrix analysis, and Global Minimum Variance (GMV) modeling.
-* **Key findings**: Identified the optimal tangent portfolio against a predefined risk-free rate and demonstrated the distinct weight distributions between the GMV and Maximum Sharpe portfolios.
-* **Skills demonstrated**: Core financial mathematics, linear algebra, and data visualization.
+**Problem.** Tracking the S&P 500 with a small subset of constituents minimizes transaction costs
+and liquidity drag, but choosing the optimal subset is an NP-hard mixed-integer quadratic program
+over 559 names.
 
-## Quantitative Techniques
+**Approach.** Two competing methods benchmarked head-to-head over 5 years
+(train 2020–2025-06, holdout 2025-07–12):
+1. **Lasso (L1) regression** — exploits the natural sparsity of L1 to select constituents and weights
+   in one step; alpha swept to trade sparsity against tracking error.
+2. **Latent factor mapping** — a PyTorch autoencoder (559 → 128 → *k* latent) plus hierarchical
+   clustering to pick representative names.
 
-* Statistical modeling
-* Time-series forecasting
-* Machine learning
-* Feature engineering
-* Portfolio analytics
-* Optimization
-* Financial econometrics
+**Results (measured).**
+- Lasso tracked the index with **43 of 559 stocks (−92% cardinality)** at a holdout tracking error
+  of **0.0045/day**.
+- The autoencoder factor map needed 50 stocks for a holdout TE of **0.075/day** — roughly **16×
+  worse**, demonstrating that a well-chosen regularized linear model can dominate a deeper,
+  more complex one on this task.
+
+**Skills.** High-dimensional sparse regression, factor modeling, tracking-error minimization,
+model benchmarking.
+
+## 3. ML Pipeline for Portfolio Optimization
+
+**Problem.** Price action alone is weakly predictive; alpha requires fusing microstructure,
+macro, fundamentals, and alternative data — without leaking the future into the past.
+
+**Approach.** An end-to-end pipeline over a 6-stock NSE universe, 5 years of daily data:
+- **Feature engineering — 44 features:** market microstructure, fundamental ratios (revenue,
+  margins, growth), macro indicators (USD/GBP/EUR/JPY, G-Sec and T-bill yields, RBI rate, Brent,
+  inflation), and **FinBERT sentiment scored over 5,426 scraped news headlines** (55% daily
+  coverage). All inputs are **lagged to eliminate look-ahead bias** and scaled with a
+  `RobustScaler`; winsorization is fit on the training window only.
+- **Models:** XGBoost, LightGBM, and a 2-layer PyTorch LSTM (lookback 20, dropout 0.2),
+  evaluated under **5-fold walk-forward validation**. The final model is selected on
+  **walk-forward RMSE — never the test set** — explicitly avoiding the temporal leakage that
+  standard K-fold CV introduces in time series.
+- **Construction & backtest:** HRP allocation (recursive bisection, cophenetic correlation 0.88)
+  with a reproducible backtest reporting Sharpe / Sortino / Calmar, drawdown, and turnover across
+  Equal-Weight, Risk-Adjusted, and Pure-HRP portfolios.
+
+**Honest finding.** Daily directional accuracy lands near **0.50** — single-name daily returns are
+close to unpredictable — which is precisely what a leakage-free evaluation is supposed to reveal.
+The value here is the **methodology and infrastructure**, not an inflated backtest.
+
+**Skills.** Data-pipeline engineering, NLP (transformers), feature engineering, rigorous
+out-of-sample validation.
+
+## 4. Goal-Based Portfolio Optimization
+
+**Problem.** Investors face discrete, time-bound liabilities; missing one incurs a borrowing
+penalty, making sequence-of-returns risk critical.
+
+**Approach.** A **vectorized Monte Carlo engine** simulating a 20-year horizon with sequential cash
+outflows and a 12% borrowing penalty on shortfalls, across **5,000 return paths × 70 discrete weight
+allocations**. Two liability schedules (aggressive-early vs. backloaded) are compared, and discrete
+brute-force optima are validated against continuous **SLSQP** optimization.
+
+**Finding.** The **timing of liabilities fundamentally changes the optimal allocation** —
+front-loaded goals demand lower-volatility mixes, while backloaded goals tolerate higher expected
+return and larger drawdowns.
+
+**Skills.** Stochastic / path-dependent simulation, combinatorial search, constrained optimization.
+
+## 5. Modern Portfolio Theory (Baseline)
+
+**Problem.** Establish the classical expected-return / variance trade-off the regularized methods
+aim to improve on.
+
+**Approach.** Markowitz optimization on a 10-stock universe (selected by correlation structure from
+30 candidates) over 3 years: Monte Carlo efficient frontier, Global Minimum Variance, and the
+Max-Sharpe tangency portfolio against a defined risk-free rate.
+
+**Skills.** Financial mathematics, linear algebra, data visualization.
+
+---
 
 ## Technology Stack
 
-* **Languages**: Python
-* **Data Processing**: Pandas, NumPy
-* **Machine Learning**: Scikit-learn, FinBERT
-* **Optimization & Math**: SciPy
-* **Simulation**: Custom Monte Carlo engines
-* **Visualization**: Matplotlib, Seaborn
+- **Language:** Python
+- **Data:** Pandas, NumPy
+- **ML / DL:** Scikit-learn, XGBoost, LightGBM, PyTorch, FinBERT (Hugging Face Transformers)
+- **Optimization / Math:** SciPy (SLSQP), SciPy hierarchical clustering
+- **Simulation:** Custom vectorized Monte Carlo engines
+- **Visualization:** Matplotlib, Seaborn, Plotly
 
 ## Repository Structure
 
 ```text
 .
-|-- Ex-Post ML techniques for Portfolio Optimization
-|   |-- notebooks
-|   |   |-- collecting_data_and_preprocess.ipynb
-|   |   |-- part1.ipynb
-|   |   `-- part2.ipynb
-|-- Goal Based Portfolio Optimization
-|   `-- Solution.ipynb
-|-- ML Pipleline for Portfolio Optimization
-|   |-- notebooks
-|   |   |-- P01_Scrapping.ipynb
-|   |   |-- P02_Pre-Processing.ipynb
-|   |   |-- P03_Sentiment.ipynb
-|   |   `-- P04_Portfolio_Construction.ipynb
-|-- Modern Portfolio Theory
-|   `-- Notebook
-|       `-- Modern Portfolio Theory.ipynb
-`-- Portfolio Replication
-    `-- notebooks
-        |-- Lasso Regression.ipynb
-        `-- Latent Factor Mapping.ipynb
+├── Ex-Post ML techniques for Portfolio Optimization
+│   └── notebooks/  collecting_data_and_preprocess · part1 · part2
+├── Portfolio Replication
+│   └── notebooks/  Lasso Regression · Latent Factor Mapping
+├── ML Pipeline for Portfolio Optimization
+│   └── notebooks/  P01_Scrapping · P02_Pre-Processing · P03_Sentiment ·
+│                   P04_Portfolio_Construction · Prediction/<TICKER>_Stock_Prediction
+├── Goal Based Portfolio Optimization
+│   └── Solution.ipynb
+└── Modern Portfolio Theory
+    └── Notebook/  Modern Portfolio Theory.ipynb
 ```
+
+Each project folder contains its own problem statement, data, and a written report (PDF).
+
+## Quantitative Techniques
+
+Covariance estimation & shrinkage · hierarchical risk parity · sparse / L1 regression ·
+factor modeling & autoencoders · time-series forecasting (GBMs, LSTM) · walk-forward validation ·
+NLP sentiment analysis · Monte Carlo simulation · constrained & combinatorial optimization ·
+financial econometrics.
